@@ -19,8 +19,10 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,8 +41,24 @@ public class MainActivity extends Activity {
     private BluetoothMonitorService mBluetoothMonitorService;
     private boolean mIsServiceBound;
 
+    // Emulated call service binding
+    private EmulatedCallService mEmulatedCallService;
+    private boolean mIsCallServiceBound;
+
+    // Call control UI
+    private EditText mCallerNumberInput;
+    private Button mTriggerCallButton;
+    private Button mAcceptCallButton;
+    private Button mHoldCallButton;
+    private Button mUnholdCallButton;
+    private Button mDisconnectCallButton;
+    private TextView mCallStateDisplay;
+
         private final BluetoothMonitorService.OnBluetoothStatusChangedListener mStatusListener =
             status -> runOnUiThread(() -> updateBtAdapterSelection(status.name()));
+
+    private final OnCallStateChangedListener mCallStateListener =
+            newState -> runOnUiThread(() -> updateCallStateDisplay(newState));
 
     private final BroadcastReceiver mBtStatusReceiver = new BroadcastReceiver() {
         @Override
@@ -74,6 +92,28 @@ public class MainActivity extends Activity {
             }
             mBluetoothMonitorService = null;
             mIsServiceBound = false;
+        }
+    };
+
+    private final ServiceConnection mCallServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            EmulatedCallService.LocalBinder binder = (EmulatedCallService.LocalBinder) service;
+            mEmulatedCallService = binder.getService();
+            mIsCallServiceBound = true;
+            mEmulatedCallService.setOnCallStateChangedListener(mCallStateListener);
+            updateCallStateDisplay(mEmulatedCallService.getCurrentState());
+            Log.d(TAG, "EmulatedCallService connected");
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            if (mEmulatedCallService != null) {
+                mEmulatedCallService.clearOnCallStateChangedListener();
+            }
+            mEmulatedCallService = null;
+            mIsCallServiceBound = false;
+            Log.d(TAG, "EmulatedCallService disconnected");
         }
     };
 
@@ -126,6 +166,127 @@ public class MainActivity extends Activity {
         Log.i(TAG, "Initial app state: " + mAppStateMachine.getCurrentState());
 
         updateBtAdapterSelection(BluetoothMonitorService.getLastKnownBluetoothStatus().name());
+
+        // Initialize emulated call control UI
+        initializeCallControlUI();
+    }
+
+    private void initializeCallControlUI() {
+        // Get the root LinearLayout from the inflated layout
+        LinearLayout mainLayout = findViewById(R.id.root_layout);
+        if (mainLayout == null) {
+            Log.w(TAG, "Cannot initialize call control UI: root_layout not found");
+            return;
+        }
+
+        // Create call control section
+        LinearLayout callSection = new LinearLayout(this);
+        callSection.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        callSection.setOrientation(LinearLayout.VERTICAL);
+        callSection.setPadding(16, 16, 16, 16);
+
+        // Call state display
+        mCallStateDisplay = new TextView(this);
+        mCallStateDisplay.setText("Call State: IDLE");
+        mCallStateDisplay.setTextSize(14);
+        mCallStateDisplay.setTextColor(0xFF000000);
+        callSection.addView(mCallStateDisplay);
+
+        // Caller number input
+        mCallerNumberInput = new EditText(this);
+        mCallerNumberInput.setHint("Enter caller number");
+        mCallerNumberInput.setText("555-1234");
+        mCallerNumberInput.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        callSection.addView(mCallerNumberInput);
+
+        // Trigger incoming call button
+        mTriggerCallButton = new Button(this);
+        mTriggerCallButton.setText("Trigger Incoming Call");
+        mTriggerCallButton.setOnClickListener(v -> triggerIncomingCall());
+        callSection.addView(mTriggerCallButton);
+
+        // Accept call button
+        mAcceptCallButton = new Button(this);
+        mAcceptCallButton.setText("Accept Call");
+        mAcceptCallButton.setOnClickListener(v -> acceptCall());
+        callSection.addView(mAcceptCallButton);
+
+        // Hold call button
+        mHoldCallButton = new Button(this);
+        mHoldCallButton.setText("Hold Call");
+        mHoldCallButton.setOnClickListener(v -> holdCall());
+        callSection.addView(mHoldCallButton);
+
+        // Unhold call button
+        mUnholdCallButton = new Button(this);
+        mUnholdCallButton.setText("Unhold Call");
+        mUnholdCallButton.setOnClickListener(v -> unholdCall());
+        callSection.addView(mUnholdCallButton);
+
+        // Disconnect call button
+        mDisconnectCallButton = new Button(this);
+        mDisconnectCallButton.setText("Disconnect Call");
+        mDisconnectCallButton.setOnClickListener(v -> disconnectCall());
+        callSection.addView(mDisconnectCallButton);
+
+        // Add call section to main layout
+        mainLayout.addView(callSection);
+    }
+
+    private void triggerIncomingCall() {
+        if (mEmulatedCallService == null) {
+            Log.w(TAG, "Call service not connected");
+            return;
+        }
+
+        String callerNumber = mCallerNumberInput.getText().toString().trim();
+        if (callerNumber.isEmpty()) {
+            callerNumber = "Unknown";
+        }
+
+        mEmulatedCallService.triggerIncomingCall(callerNumber, "Mock Caller");
+    }
+
+    private void acceptCall() {
+        if (mEmulatedCallService == null) {
+            Log.w(TAG, "Call service not connected");
+            return;
+        }
+        mEmulatedCallService.acceptCall();
+    }
+
+    private void holdCall() {
+        if (mEmulatedCallService == null) {
+            Log.w(TAG, "Call service not connected");
+            return;
+        }
+        mEmulatedCallService.holdCall();
+    }
+
+    private void unholdCall() {
+        if (mEmulatedCallService == null) {
+            Log.w(TAG, "Call service not connected");
+            return;
+        }
+        mEmulatedCallService.unholdCall();
+    }
+
+    private void disconnectCall() {
+        if (mEmulatedCallService == null) {
+            Log.w(TAG, "Call service not connected");
+            return;
+        }
+        mEmulatedCallService.disconnectCall();
+    }
+
+    private void updateCallStateDisplay(CallState state) {
+        if (mCallStateDisplay != null) {
+            mCallStateDisplay.setText("Call State: " + state.name());
+        }
     }
 
     @Override
@@ -140,6 +301,10 @@ public class MainActivity extends Activity {
 
         Intent serviceIntent = new Intent(this, BluetoothMonitorService.class);
         bindService(serviceIntent, mServiceConnection, Context.BIND_AUTO_CREATE);
+
+        // Bind to EmulatedCallService
+        Intent callServiceIntent = new Intent(this, EmulatedCallService.class);
+        bindService(callServiceIntent, mCallServiceConnection, Context.BIND_AUTO_CREATE);
     }
 
     @Override
@@ -153,6 +318,15 @@ public class MainActivity extends Activity {
             }
             unbindService(mServiceConnection);
             mIsServiceBound = false;
+        }
+
+        // Unbind from EmulatedCallService
+        if (mIsCallServiceBound) {
+            if (mEmulatedCallService != null) {
+                mEmulatedCallService.clearOnCallStateChangedListener();
+            }
+            unbindService(mCallServiceConnection);
+            mIsCallServiceBound = false;
         }
     }
 

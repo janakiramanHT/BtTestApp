@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
 
     <application
         android:name=".BtTestApplication"
@@ -13,6 +15,21 @@
             android:name=".BluetoothMonitorService"
             android:enabled="true"
             android:exported="false" />
+
+        <service
+            android:name=".EmulatedCallService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <service
+            android:name=".MockConnectionService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".MainActivity"
