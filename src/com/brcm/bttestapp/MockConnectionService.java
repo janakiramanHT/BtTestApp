@@ -142,6 +142,9 @@ public class MockConnectionService extends ConnectionService {
         }
 
         connection.setConnectionProperties(Connection.PROPERTY_SELF_MANAGED);
+        // Explicitly advertise hold support so Telecom/HFP surfaces HOLD/UNHOLD actions.
+        connection.setConnectionCapabilities(
+            Connection.CAPABILITY_HOLD | Connection.CAPABILITY_SUPPORT_HOLD);
         connection.setRinging();
 
         Log.d(TAG, "Incoming connection created, handing back to EmulatedCallService");
