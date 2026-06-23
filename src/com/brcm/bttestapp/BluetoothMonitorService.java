@@ -13,6 +13,9 @@ import android.util.Log;
 public class BluetoothMonitorService extends Service {
 
     private static final String TAG = "BluetoothMonitorService";
+    public static final String ACTION_BT_STATUS_CHANGED =
+            "com.brcm.bttestapp.ACTION_BT_STATUS_CHANGED";
+    public static final String EXTRA_BT_STATUS = "extra_bt_status";
 
     public enum BluetoothStatus {
         UNKNOWN,
@@ -24,7 +27,12 @@ public class BluetoothMonitorService extends Service {
 
     private final IBinder mBinder = new LocalBinder();
     private volatile BluetoothStatus mCurrentBluetoothStatus = BluetoothStatus.UNKNOWN;
+    private volatile OnBluetoothStatusChangedListener mStatusChangedListener;
     private BluetoothAdapter mBluetoothAdapter;
+
+    public interface OnBluetoothStatusChangedListener {
+        void onBluetoothStatusChanged(BluetoothStatus status);
+    }
 
     private final BroadcastReceiver mBluetoothReceiver = new BroadcastReceiver() {
         @Override
@@ -88,6 +96,16 @@ public class BluetoothMonitorService extends Service {
         return sLastKnownBluetoothStatus;
     }
 
+    public void setOnBluetoothStatusChangedListener(OnBluetoothStatusChangedListener listener) {
+        mStatusChangedListener = listener;
+    }
+
+    public void clearOnBluetoothStatusChangedListener(OnBluetoothStatusChangedListener listener) {
+        if (mStatusChangedListener == listener) {
+            mStatusChangedListener = null;
+        }
+    }
+
     private void refreshCurrentBluetoothStatus() {
         BluetoothStatus status = BluetoothStatus.UNKNOWN;
         try {
@@ -119,5 +137,15 @@ public class BluetoothMonitorService extends Service {
     private void updateStatus(BluetoothStatus status) {
         mCurrentBluetoothStatus = status;
         sLastKnownBluetoothStatus = status;
+
+        OnBluetoothStatusChangedListener listener = mStatusChangedListener;
+        if (listener != null) {
+            listener.onBluetoothStatusChanged(status);
+        }
+
+        Intent updateIntent = new Intent(ACTION_BT_STATUS_CHANGED);
+        updateIntent.setPackage(getPackageName());
+        updateIntent.putExtra(EXTRA_BT_STATUS, status.name());
+        sendBroadcast(updateIntent);
     }
 }
