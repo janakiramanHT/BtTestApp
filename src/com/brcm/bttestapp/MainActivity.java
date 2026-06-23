@@ -1,27 +1,41 @@
 package com.brcm.bttestapp;
 
+import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
+import android.widget.ListView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
 
     private static final String TAG = "MainActivity";
+    private static final int REQUEST_BLUETOOTH_CONNECT_PERMISSION = 1001;
 
     private AppStateMachine mAppStateMachine;
     private CheckBox mBtAdapterCheckBox;
+    private Button mRefreshBondedButton;
+    private ListView mBondedDevicesListView;
+    private ArrayAdapter<String> mBondedDevicesAdapter;
+    private final List<String> mBondedDevicesData = new ArrayList<>();
     private BluetoothMonitorService mBluetoothMonitorService;
     private boolean mIsServiceBound;
 
@@ -50,6 +64,7 @@ public class MainActivity extends Activity {
             mIsServiceBound = true;
             mBluetoothMonitorService.setOnBluetoothStatusChangedListener(mStatusListener);
             updateBtAdapterSelection(mBluetoothMonitorService.getCurrentBluetoothStatus().name());
+            refreshBondedDevices();
         }
 
         @Override
@@ -67,6 +82,8 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mBtAdapterCheckBox = findViewById(R.id.cb_bt_adapter);
+        mRefreshBondedButton = findViewById(R.id.btn_refresh_bonded);
+        mBondedDevicesListView = findViewById(R.id.lv_bonded_devices);
         if (mBtAdapterCheckBox == null) {
             Log.w(TAG, "BT adapter checkbox not found in layout. Building fallback UI.");
             LinearLayout fallbackRoot = new LinearLayout(this);
@@ -85,6 +102,18 @@ public class MainActivity extends Activity {
             fallbackRoot.addView(mBtAdapterCheckBox);
 
             setContentView(fallbackRoot);
+        }
+
+        if (mBondedDevicesListView != null) {
+            mBondedDevicesAdapter = new ArrayAdapter<>(
+                    this,
+                    android.R.layout.simple_list_item_1,
+                    mBondedDevicesData);
+            mBondedDevicesListView.setAdapter(mBondedDevicesAdapter);
+        }
+
+        if (mRefreshBondedButton != null) {
+            mRefreshBondedButton.setOnClickListener(v -> refreshBondedDevices());
         }
 
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -141,5 +170,99 @@ public class MainActivity extends Activity {
             isSelected = "Bluetooth_ON".equals(statusText);
         }
         mBtAdapterCheckBox.setChecked(isSelected);
+    }
+
+    private void refreshBondedDevices() {
+        if (mBondedDevicesAdapter == null) {
+            return;
+        }
+
+        mBondedDevicesData.clear();
+
+        if (!ensureBluetoothConnectPermission()) {
+            mBondedDevicesData.add("Bluetooth permission not granted");
+            mBondedDevicesAdapter.notifyDataSetChanged();
+            return;
+        }
+
+        if (!mIsServiceBound || mBluetoothMonitorService == null) {
+            mBondedDevicesData.add("Service not connected");
+            mBondedDevicesAdapter.notifyDataSetChanged();
+            return;
+        }
+
+        List<BluetoothDevice> bondedDevices = mBluetoothMonitorService.getBondedDevices();
+        if (bondedDevices.isEmpty()) {
+            mBondedDevicesData.add("No bonded devices");
+            mBondedDevicesAdapter.notifyDataSetChanged();
+            return;
+        }
+
+        for (BluetoothDevice device : bondedDevices) {
+            if (device == null) {
+                continue;
+            }
+
+            String name = "Unknown";
+            String address = "";
+            try {
+                if (device.getName() != null && !device.getName().isEmpty()) {
+                    name = device.getName();
+                }
+                if (device.getAddress() != null) {
+                    address = device.getAddress();
+                }
+            } catch (SecurityException e) {
+                Log.w(TAG, "Missing permission while reading bonded device fields", e);
+            }
+
+            if (address.isEmpty()) {
+                mBondedDevicesData.add(name);
+            } else {
+                mBondedDevicesData.add(name + " (" + address + ")");
+            }
+        }
+
+        if (mBondedDevicesData.isEmpty()) {
+            mBondedDevicesData.add("No bonded devices");
+        }
+        mBondedDevicesAdapter.notifyDataSetChanged();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+            String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode != REQUEST_BLUETOOTH_CONNECT_PERMISSION) {
+            return;
+        }
+
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            refreshBondedDevices();
+            return;
+        }
+
+        if (mBondedDevicesAdapter != null) {
+            mBondedDevicesData.clear();
+            mBondedDevicesData.add("Bluetooth permission denied");
+            mBondedDevicesAdapter.notifyDataSetChanged();
+        }
+    }
+
+    private boolean ensureBluetoothConnectPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true;
+        }
+
+        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED) {
+            return true;
+        }
+
+        requestPermissions(
+                new String[] { Manifest.permission.BLUETOOTH_CONNECT },
+                REQUEST_BLUETOOTH_CONNECT_PERMISSION);
+        return false;
     }
 }

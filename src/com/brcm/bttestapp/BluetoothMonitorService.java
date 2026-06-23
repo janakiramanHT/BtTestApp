@@ -1,14 +1,23 @@
 package com.brcm.bttestapp;
 
+import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.app.Service;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 public class BluetoothMonitorService extends Service {
 
@@ -94,6 +103,34 @@ public class BluetoothMonitorService extends Service {
 
     public static BluetoothStatus getLastKnownBluetoothStatus() {
         return sLastKnownBluetoothStatus;
+    }
+
+    public List<BluetoothDevice> getBondedDevices() {
+        if (mBluetoothAdapter == null) {
+            mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        }
+
+        if (mBluetoothAdapter == null) {
+            return Collections.emptyList();
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "BLUETOOTH_CONNECT permission not granted; returning empty bonded list");
+            return Collections.emptyList();
+        }
+
+        try {
+            Set<BluetoothDevice> bondedSet = mBluetoothAdapter.getBondedDevices();
+            if (bondedSet == null || bondedSet.isEmpty()) {
+                return Collections.emptyList();
+            }
+            return new ArrayList<>(bondedSet);
+        } catch (SecurityException e) {
+            Log.w(TAG, "Cannot read bonded devices due to missing permission", e);
+            return Collections.emptyList();
+        }
     }
 
     public void setOnBluetoothStatusChangedListener(OnBluetoothStatusChangedListener listener) {

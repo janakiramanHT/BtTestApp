@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">BtTestApp</string>
     <string name="bt_adapter_label">BT Adapter</string>
+    <string name="refresh_bonded_devices">Refresh Bonded Devices</string>
+    <string name="bonded_devices_label">Bonded Devices</string>
     <string name="bt_status_default">BT Status: UNKNOWN</string>
     <string name="bt_status_prefix">BT Status: %1$s</string>
 </resources>
