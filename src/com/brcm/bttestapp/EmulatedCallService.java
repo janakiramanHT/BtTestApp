@@ -75,6 +75,33 @@ public class EmulatedCallService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "EmulatedCallService created");
+        MockConnectionService.setOnConnectionEventCallback(new MockConnectionService.OnConnectionEventCallback() {
+            @Override
+            public void onAnswered() {
+                onFrameworkCallAnswered();
+            }
+
+            @Override
+            public void onRejected() {
+                onFrameworkCallEnded("rejected");
+            }
+
+            @Override
+            public void onHeld() {
+                onFrameworkCallHeld();
+            }
+
+            @Override
+            public void onUnheld() {
+                onFrameworkCallUnheld();
+            }
+
+            @Override
+            public void onDisconnected() {
+                onFrameworkCallEnded("disconnected");
+            }
+        });
+
         boolean hasManageOwnCalls = checkSelfPermission(android.Manifest.permission.MANAGE_OWN_CALLS)
                 == PackageManager.PERMISSION_GRANTED;
         Log.d(TAG, "MANAGE_OWN_CALLS granted=" + hasManageOwnCalls);
@@ -104,6 +131,7 @@ public class EmulatedCallService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "EmulatedCallService destroyed");
+        MockConnectionService.clearOnConnectionEventCallback();
         // Clean up: if a call is active, disconnect it
         if (mCurrentCallState != CallState.IDLE && mCurrentCallState != CallState.DISCONNECTED) {
             disconnectCall();
@@ -405,6 +433,40 @@ public class EmulatedCallService extends Service {
             MockConnectionService.clearOnConnectionCreatedCallback();
             return false;
         }
+    }
+
+    private void onFrameworkCallAnswered() {
+        Log.d(TAG, "Framework callback: call answered");
+        if (mCurrentCallState == CallState.INCOMING_RINGING) {
+            transitionToState(CallState.ACTIVE);
+        }
+    }
+
+    private void onFrameworkCallHeld() {
+        Log.d(TAG, "Framework callback: call held");
+        if (mCurrentCallState == CallState.ACTIVE) {
+            transitionToState(CallState.HELD);
+        }
+    }
+
+    private void onFrameworkCallUnheld() {
+        Log.d(TAG, "Framework callback: call unheld");
+        if (mCurrentCallState == CallState.HELD) {
+            transitionToState(CallState.ACTIVE);
+        }
+    }
+
+    private void onFrameworkCallEnded(String reason) {
+        Log.d(TAG, "Framework callback: call ended, reason=" + reason);
+        if (mCurrentCallState == CallState.IDLE) {
+            return;
+        }
+
+        transitionToState(CallState.DISCONNECTED);
+        mCurrentConnection = null;
+        mCurrentCallState = CallState.IDLE;
+        mCallerNumber = null;
+        mCallerName = null;
     }
 
     /**

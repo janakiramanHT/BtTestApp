@@ -26,8 +26,18 @@ public class MockConnectionService extends ConnectionService {
         void onConnectionCreated(Connection connection);
     }
 
+    /** Callback interface for framework-driven connection events. */
+    public interface OnConnectionEventCallback {
+        void onAnswered();
+        void onRejected();
+        void onHeld();
+        void onUnheld();
+        void onDisconnected();
+    }
+
     // Static callback: set by EmulatedCallService before calling addNewIncomingCall()
     private static volatile OnConnectionCreatedCallback sConnectionCallback;
+    private static volatile OnConnectionEventCallback sConnectionEventCallback;
 
     public static void setOnConnectionCreatedCallback(OnConnectionCreatedCallback cb) {
         sConnectionCallback = cb;
@@ -35,6 +45,14 @@ public class MockConnectionService extends ConnectionService {
 
     public static void clearOnConnectionCreatedCallback() {
         sConnectionCallback = null;
+    }
+
+    public static void setOnConnectionEventCallback(OnConnectionEventCallback cb) {
+        sConnectionEventCallback = cb;
+    }
+
+    public static void clearOnConnectionEventCallback() {
+        sConnectionEventCallback = null;
     }
 
     @Override
@@ -61,6 +79,10 @@ public class MockConnectionService extends ConnectionService {
             public void onAnswer() {
                 Log.d(TAG, "Connection.onAnswer() called by framework");
                 setActive();
+                OnConnectionEventCallback cb = sConnectionEventCallback;
+                if (cb != null) {
+                    cb.onAnswered();
+                }
             }
 
             @Override
@@ -68,18 +90,30 @@ public class MockConnectionService extends ConnectionService {
                 Log.d(TAG, "Connection.onReject() called by framework");
                 setDisconnected(new DisconnectCause(DisconnectCause.REJECTED));
                 destroy();
+                OnConnectionEventCallback cb = sConnectionEventCallback;
+                if (cb != null) {
+                    cb.onRejected();
+                }
             }
 
             @Override
             public void onHold() {
                 Log.d(TAG, "Connection.onHold() called by framework");
                 setOnHold();
+                OnConnectionEventCallback cb = sConnectionEventCallback;
+                if (cb != null) {
+                    cb.onHeld();
+                }
             }
 
             @Override
             public void onUnhold() {
                 Log.d(TAG, "Connection.onUnhold() called by framework");
                 setActive();
+                OnConnectionEventCallback cb = sConnectionEventCallback;
+                if (cb != null) {
+                    cb.onUnheld();
+                }
             }
 
             @Override
@@ -87,6 +121,10 @@ public class MockConnectionService extends ConnectionService {
                 Log.d(TAG, "Connection.onDisconnect() called by framework");
                 setDisconnected(new DisconnectCause(DisconnectCause.LOCAL));
                 destroy();
+                OnConnectionEventCallback cb = sConnectionEventCallback;
+                if (cb != null) {
+                    cb.onDisconnected();
+                }
             }
         };
 
